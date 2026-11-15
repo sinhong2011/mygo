@@ -68,6 +68,8 @@ type window struct {
 	topEdge                uintptr     // the window over the top resize border of one without a caption (topedge.go), or 0
 	noRedirect             bool        // no redirection bitmap, for a material behind the page
 	fullScreen             bool
+	fullByApp              bool     // the app asked for the full screen; the page's own does not end it
+	pageFull               bool     // the page has an element full screen (webview.go)
 	reframing              bool     // SetFullScreen is changing the frame
 	showMaximized          bool     // on the first show (WindowOptions.Maximized)
 	dropped                []string // DroppedFiles
@@ -1230,9 +1232,26 @@ func (w *window) Restore() {
 
 // SetFullScreen takes the window's frame and menu bar away, or gives them
 // back. Each step sizes the window again: it is laid out once, at the end.
-func (w *window) SetFullScreen(v bool) {
+// The page's own full screen, if it has one, follows the window out.
+func (w *window) SetFullScreen(v bool) { w.setFullScreen(v, true) }
+
+// setFullScreen is SetFullScreen with byApp telling who asked: a window
+// the app made full screen stays so when the page comes out of its own
+// full screen, as AppKit leaves macOS windows that the user made full
+// screen while a video played in one. The page driving the window in and
+// out of full screen is webview.go's pageFullScreenChanged.
+func (w *window) setFullScreen(v bool, byApp bool) {
 	if v == w.fullScreen {
 		return
+	}
+	if v {
+		w.fullByApp = w.fullByApp || byApp
+	} else {
+		if !byApp && w.fullByApp {
+			return // the app has this window full screen; the page leaving its own is no leave
+		}
+		w.fullByApp = false
+		w.leavePageFullScreen()
 	}
 	if w.inMenu {
 		procEndMenu.Call() // its menus come from a bar that comes or goes
