@@ -1241,12 +1241,15 @@ func (w *window) SetFullScreen(v bool) { w.setFullScreen(v, true) }
 // screen while a video played in one. The page driving the window in and
 // out of full screen is webview.go's pageFullScreenChanged.
 func (w *window) setFullScreen(v bool, byApp bool) {
+	if v && byApp {
+		// Also when the page has the window full screen already: the app
+		// asking for it keeps it so after the page leaves its own.
+		w.fullByApp = true
+	}
 	if v == w.fullScreen {
 		return
 	}
-	if v {
-		w.fullByApp = w.fullByApp || byApp
-	} else {
+	if !v {
 		if !byApp && w.fullByApp {
 			return // the app has this window full screen; the page leaving its own is no leave
 		}
